@@ -1,0 +1,8 @@
+node_modules/
+*.db
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+ai-service-python/model/*.joblib

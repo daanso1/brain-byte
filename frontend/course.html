@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Course — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" id="course-container">
+  <p class="muted">Loading course...</p>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('courses.html');
+
+  const params = new URLSearchParams(window.location.search);
+  const courseId = params.get('id');
+  const container = document.getElementById('course-container');
+
+  async function loadCourse() {
+    if (!courseId) {
+      container.innerHTML = `<p class="form-error" style="display:block;">No course specified.</p>`;
+      return;
+    }
+    try {
+      const headers = {};
+      const course = await apiRequest(`/courses/${courseId}`, { auth: true });
+
+      const completed = course.lessons.filter(l => l.completed).length;
+      const total = course.lessons.length;
+
+      container.innerHTML = `
+        <div style="max-width:720px;">
+          <p class="eyebrow">${course.category} · Difficulty ${course.difficulty}/3</p>
+          <h2 style="font-size:30px;">${course.icon} ${course.title}</h2>
+          <p style="font-size:16px;">${course.description}</p>
+
+          <div class="byte-meter-row" style="margin:20px 0 32px;">
+            ${byteMeterHtml(completed, total, 'teal')}
+            <span class="byte-meter-label">${completed}/${total} lessons complete</span>
+          </div>
+
+          <h3 style="margin-bottom:16px;">Lessons</h3>
+          <div id="lessons-list"></div>
+        </div>
+      `;
+
+      document.getElementById('lessons-list').innerHTML = course.lessons.map(l => `
+        <div class="lesson-list-item ${l.completed ? 'completed' : ''}">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span class="check-dot ${l.completed ? 'done' : ''}">${l.completed ? '✓' : ''}</span>
+            <a href="lesson.html?id=${l.id}&courseId=${course.id}">${l.title}</a>
+          </div>
+          <span class="mono muted" style="font-size:13px;">+${l.points_value} pts</span>
+        </div>
+      `).join('');
+
+    } catch (err) {
+      container.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+    }
+  }
+  loadCourse();
+</script>
+</body>
+</html>

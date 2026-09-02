@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign up — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container">
+  <div class="card form-card">
+    <p class="eyebrow">Get started</p>
+    <h2>Create your account</h2>
+    <div class="form-error" id="error-box"></div>
+    <form id="register-form">
+      <div class="form-group">
+        <label for="name">Full name</label>
+        <input type="text" id="name" required placeholder="Thandiwe Mokoena">
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" required placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required minlength="6" placeholder="At least 6 characters">
+      </div>
+      <div class="form-group">
+        <label for="interest">What are you most interested in?</label>
+        <select id="interest">
+          <option value="">Not sure yet</option>
+          <option value="Foundations">Digital Literacy Foundations</option>
+          <option value="Web Development">Web Development</option>
+          <option value="Programming">Programming</option>
+          <option value="Cybersecurity">Cybersecurity</option>
+          <option value="Data">Data & Spreadsheets</option>
+          <option value="Tools">Developer Tools</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Create account</button>
+    </form>
+    <p style="margin-top:18px; font-size:14px; text-align:center;">
+      Already have an account? <a href="login.html">Log in</a>
+    </p>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav();
+  if (Auth.isLoggedIn()) window.location.href = 'dashboard.html';
+
+  const form = document.getElementById('register-form');
+  const errorBox = document.getElementById('error-box');
+  const submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+
+    try {
+      const data = await apiRequest('/auth/register', {
+        method: 'POST',
+        body: {
+          name: document.getElementById('name').value,
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value,
+          preferred_category: document.getElementById('interest').value || null,
+        },
+      });
+      Auth.setSession(data.token, data.user);
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create account';
+    }
+  });
+</script>
+</body>
+</html>

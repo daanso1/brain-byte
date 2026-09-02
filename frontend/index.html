@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brain Byte — Digital skills, one byte at a time</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <p class="eyebrow">Free digital skills training</p>
+      <h1>Learn IT & programming, <span class="accent">one byte at a time.</span></h1>
+      <p style="font-size:18px; max-width:480px; margin-top:16px;">
+        Brain Byte is built for learners across South Africa who want real IT and programming
+        skills but don't have access to a university or college. No fees, no gatekeeping —
+        just structured lessons, an AI tutor that adapts to you, and progress you can see.
+      </p>
+      <div class="hero-actions">
+        <a href="register.html" class="btn btn-primary">Start learning free</a>
+        <a href="courses.html" class="btn btn-secondary">Browse courses</a>
+      </div>
+    </div>
+    <div>
+      <div class="byte-hero-visual" id="hero-visual"></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <p class="eyebrow">Why Brain Byte</p>
+    <h2 style="font-size:30px; margin-bottom:36px;">Everything you need to go from zero to job-ready skills</h2>
+    <div class="grid-cards">
+      <div class="card feature-card">
+        <div class="icon">🧠</div>
+        <h3>AI-powered recommendations</h3>
+        <p>A model trained on how people actually learn suggests your next course — matched to your
+        interests and just challenging enough to keep you growing.</p>
+      </div>
+      <div class="card feature-card">
+        <div class="icon">📊</div>
+        <h3>Real progress tracking</h3>
+        <p>See exactly how far you've come across every course, with a dashboard built around one
+        clear idea: your progress, one byte at a time.</p>
+      </div>
+      <div class="card feature-card">
+        <div class="icon">🏆</div>
+        <h3>Gamified learning</h3>
+        <p>Earn points, unlock badges, and build a streak. Learning alone is hard — Brain Byte
+        makes momentum visible.</p>
+      </div>
+      <div class="card feature-card">
+        <div class="icon">🌍</div>
+        <h3>Built for access, not gatekeeping</h3>
+        <p>No tuition, no application process, no prerequisites. Just a browser and a willingness
+        to learn.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0;">
+  <div class="container card" style="text-align:center; padding:56px 24px;">
+    <h2 style="font-size:28px;">Your first byte is free. So is every other one.</h2>
+    <p style="max-width:480px; margin:12px auto 24px;">Create an account and get a course recommendation
+    picked for you in under a minute.</p>
+    <a href="register.html" class="btn btn-primary">Create free account</a>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Brain Byte — a digital skills platform for South African youth.
+  </div>
+</footer>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('index.html');
+
+  // Signature hero visual: 32 cells, a handful lit up like a byte-grid coming alive.
+  const visual = document.getElementById('hero-visual');
+  const litIndices = new Set([2, 5, 9, 13, 14, 18, 22, 25, 27, 30]);
+  for (let i = 0; i < 32; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    if (litIndices.has(i)) {
+      cell.style.background = i % 3 === 0 ? 'var(--gold)' : (i % 3 === 1 ? 'var(--teal)' : 'var(--lavender)');
+      cell.style.borderColor = 'transparent';
+    }
+    visual.appendChild(cell);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" style="max-width:720px;" id="lesson-container">
+  <p class="muted">Loading lesson...</p>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('courses.html');
+
+  const params = new URLSearchParams(window.location.search);
+  const lessonId = params.get('id');
+  const courseId = params.get('courseId');
+  const container = document.getElementById('lesson-container');
+
+  if (requireLogin()) loadLesson();
+
+  async function loadLesson() {
+    if (!lessonId) {
+      container.innerHTML = `<p class="form-error" style="display:block;">No lesson specified.</p>`;
+      return;
+    }
+    try {
+      const lesson = await apiRequest(`/courses/lesson/${lessonId}`);
+      container.innerHTML = `
+        ${courseId ? `<a href="course.html?id=${courseId}" class="muted" style="font-size:14px;">← Back to course</a>` : ''}
+        <p class="eyebrow" style="margin-top:14px;">Lesson</p>
+        <h2 style="font-size:28px;">${lesson.title}</h2>
+        <div class="card" style="margin:20px 0; font-size:16px; line-height:1.7;">
+          ${lesson.content}
+        </div>
+        <div id="complete-section">
+          <button class="btn btn-primary" id="complete-btn">Mark lesson complete (+${lesson.points_value} pts)</button>
+        </div>
+        <div id="feedback"></div>
+      `;
+
+      document.getElementById('complete-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('complete-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        try {
+          const result = await apiRequest(`/progress/complete/${lessonId}`, { method: 'POST', auth: true, body: {} });
+          renderFeedback(result);
+        } catch (err) {
+          document.getElementById('feedback').innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+          btn.disabled = false;
+          btn.textContent = 'Mark lesson complete';
+        }
+      });
+
+    } catch (err) {
+      container.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+    }
+  }
+
+  function renderFeedback(result) {
+    const feedback = document.getElementById('feedback');
+    document.getElementById('complete-section').innerHTML = `<p style="color:var(--teal); font-weight:600;">✓ Lesson completed</p>`;
+
+    let html = `<div class="form-success">+${result.points_earned || 0} points earned${result.leveled_up ? ` — you reached Level ${result.level}! 🎉` : ''}</div>`;
+
+    if (result.new_badges && result.new_badges.length > 0) {
+      html += result.new_badges.map(b => `
+        <div class="badge-pill" style="margin-top:10px;">
+          <span class="icon">${b.icon}</span>
+          <div>
+            <div class="name">New badge: ${b.name}</div>
+            <div class="desc">${b.description}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if (courseId) {
+      html += `<a href="course.html?id=${courseId}" class="btn btn-secondary" style="margin-top:16px;">Back to course</a>`;
+    }
+
+    feedback.innerHTML = html;
+  }
+</script>
+</body>
+</html>

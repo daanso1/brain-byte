@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courses — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section">
+  <p class="eyebrow">All courses</p>
+  <h2 style="font-size:30px; margin-bottom:28px;">Pick a skill to start building</h2>
+  <div class="grid-cards" id="courses-grid">
+    <p class="muted">Loading courses...</p>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('courses.html');
+
+  async function loadCourses() {
+    const grid = document.getElementById('courses-grid');
+    try {
+      const courses = await apiRequest('/courses');
+      grid.innerHTML = courses.map(c => `
+        <a href="course.html?id=${c.id}" class="course-card" style="text-decoration:none;">
+          <div class="flex-between">
+            <span class="course-icon">${c.icon}</span>
+            <div class="difficulty-dots">
+              ${[1,2,3].map(n => `<span class="${n <= c.difficulty ? 'filled' : ''}"></span>`).join('')}
+            </div>
+          </div>
+          <h3 style="font-size:18px; color:var(--text);">${c.title}</h3>
+          <p style="font-size:14px;">${c.description}</p>
+          <span class="course-tag">${c.category}</span>
+        </a>
+      `).join('');
+    } catch (err) {
+      grid.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+    }
+  }
+  loadCourses();
+</script>
+</body>
+</html>

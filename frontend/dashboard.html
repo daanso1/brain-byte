@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section">
+  <div id="greeting"></div>
+
+  <div class="stat-grid" style="margin-bottom:32px;">
+    <div class="card">
+      <div class="stat-label">Total points</div>
+      <div class="stat-value mono" id="stat-points">—</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Level</div>
+      <div class="stat-value mono" id="stat-level">—</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Day streak</div>
+      <div class="stat-value mono" id="stat-streak">—</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Lessons completed</div>
+      <div class="stat-value mono" id="stat-lessons">—</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card" style="margin-bottom:24px;">
+        <div class="flex-between" style="margin-bottom:16px;">
+          <h3 style="margin:0;">Course progress</h3>
+        </div>
+        <div id="course-progress-list"><p class="muted">Loading...</p></div>
+      </div>
+
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:16px;">
+          <h3 style="margin:0;">🧠 Recommended for you</h3>
+          <span class="muted mono" style="font-size:12px;" id="rec-source"></span>
+        </div>
+        <div id="recommendations-list"><p class="muted">Thinking about what to suggest...</p></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:24px;">
+        <h3 style="margin-bottom:16px;">Badges</h3>
+        <div id="badges-list" style="display:flex; flex-direction:column; gap:10px;">
+          <p class="muted">Loading...</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h3 style="margin-bottom:16px;">🏆 Leaderboard</h3>
+        <div id="leaderboard-list"><p class="muted">Loading...</p></div>
+      </div>
+
+      <div class="card" style="border-color: var(--coral);">
+        <h3 style="margin-bottom:8px; color: var(--coral);">Danger Zone</h3>
+        <p style="font-size:14px;">Deleting your account permanently removes your profile, progress, points and badges. This cannot be undone.</p>
+        <button class="btn" id="delete-account-btn" style="background: var(--coral); color: white; margin-top:8px;">Delete My Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
