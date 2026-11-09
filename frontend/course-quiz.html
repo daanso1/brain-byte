@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Course Quiz — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .cq-question { margin-bottom: 26px; }
+  .cq-question h4 { font-size: 16px; margin-bottom: 12px; line-height: 1.4; }
+  .cq-option {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; text-align: left; cursor: pointer;
+    margin-bottom: 10px; padding: 13px 16px;
+    background: var(--bg-elevated-2, rgba(255,255,255,0.06));
+    border: 1.5px solid var(--border-subtle, rgba(255,255,255,0.14));
+    border-radius: 12px; color: var(--text, #f5f3fb);
+    font-family: inherit; font-size: 15px;
+  }
+  .cq-option:hover { border-color: var(--purple, #a78bfa); }
+  .cq-option .box {
+    width: 18px; height: 18px; flex-shrink: 0; border-radius: 5px;
+    border: 2px solid var(--text-faint, #766f96);
+  }
+  .cq-option.selected { border-color: var(--purple, #a78bfa); }
+  .cq-option.selected .box { background: var(--purple, #a78bfa); border-color: var(--purple, #a78bfa); }
+  .cq-option.is-correct { border-color: #22c55e; background: rgba(34,197,94,0.10); cursor: default; }
+  .cq-option.is-wrong { border-color: #ef4444; background: rgba(239,68,68,0.10); cursor: default; }
+  .cq-option .tag { margin-left: auto; font-size: 12px; font-weight: 700; font-family: var(--font-mono, monospace); }
+  .score-big { font-family: var(--font-mono, monospace); font-size: 44px; font-weight: 700; }
+</style>
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" style="max-width:760px;" id="quiz-container">
+  <p class="muted">Loading quiz...</p>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('courses.html');
+
+  const params = new URLSearchParams(window.location.search);
+  const courseId = params.get('id');
+  const container = document.getElementById('quiz-container');
+  const LETTERS = ['A', 'B', 'C', 'D'];
+  let quiz = null;
+  const chosen = {}; // question id -> option index
+
+  function esc(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  if (requireLogin()) loadQuiz();
+
+  async function loadQuiz() {
+    if (!courseId) {
+      container.innerHTML = '<p class="form-error" style="display:block;">No course specified.</p>';
+      return;
+    }
+    try {
+      quiz = await apiRequest('/course-quiz/' + courseId, { auth: true });
+      renderQuiz();
+    } catch (err) {
+      container.innerHTML = '<a href="course.html?id=' + esc(courseId) + '" class="muted" style="font-size:14px;">&larr; Back to course</a>' +
+        '<p class="form-error" style="display:block; margin-top:14px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function renderQuiz() {
+    const r = quiz.result;
+    container.innerHTML = `
+      <a href="course.html?id=${quiz.course.id}" class="muted" style="font-size:14px;">&larr; Back to course</a>
+      <p class="eyebrow" style="margin-top:14px;">Course quiz</p>
+      <h2 style="font-size:28px;">${esc(quiz.course.title)}</h2>
+      <p>${quiz.questions.length} questions. Choose one answer for each, then submit. Pass mark: ${quiz.pass_mark}%.
+        ${r && r.passed ? 'You have already passed this quiz, so retaking it will not change your points.' : 'Pass for the first time to earn ' + quiz.pass_points + ' bonus points.'}</p>
+      ${r ? '<p class="mono muted" style="font-size:13px;">Best score so far: ' + r.best_score + '%</p>' : ''}
+      <div id="questions" style="margin-top:22px;"></div>
+      <div id="feedback"></div>
+      <button class="btn btn-primary" id="submit-btn" disabled>Submit answers</button>
+      <span class="muted" id="progress-note" style="margin-left:12px; font-size:13px;"></span>
+    `;
+
+    document.getElementById('questions').innerHTML = quiz.questions.map((q, qi) => `
+      <div class="cq-question" data-qid="${q.id}">
+        <h4>${qi + 1}. ${esc(q.question)}</h4>
+        ${q.options.map((opt, oi) => `
+          <button type="button" class="cq-option" data-q="${q.id}" data-o="${oi}">
+            <span class="box"></span><span>${esc(opt)}</span>
+          </button>`).join('')}
+      </div>
+    `).join('');
+
+    document.querySelectorAll('.cq-option').forEach(btn => {
+      btn.addEventListener('click', () => choose(Number(btn.dataset.q), Number(btn.dataset.o)));
+    });
+    document.getElementById('submit-btn').addEventListener('click', submitQuiz);
+    updateProgress();
+  }
+
+  function choose(qid, oi) {
+    chosen[qid] = oi;
+    document.querySelectorAll('.cq-option[data-q="' + qid + '"]').forEach(b => {
+      b.classList.toggle('selected', Number(b.dataset.o) === oi);
+    });
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const answered = Object.keys(chosen).length;
+    const total = quiz.questions.length;
+    document.getElementById('submit-btn').disabled = answered < total;
+    document.getElementById('progress-note').textContent = answered + ' of ' + total + ' answered';
+  }
+
+  async function submitQuiz() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Marking...';
+    try {
+      const answers = quiz.questions.map(q => ({ question_id: q.id, answer_index: chosen[q.id] }));
+      const result = await apiRequest('/course-quiz/' + courseId + '/submit', { method: 'POST', auth: true, body: { answers } });
+      renderResult(result);
+    } catch (err) {
+      document.getElementById('feedback').innerHTML = '<p class="form-error" style="display:block;">' + esc(err.message) + '</p>';
+      btn.disabled = false;
+      btn.textContent = 'Submit answers';
+    }
+  }
+
+  function renderResult(res) {
+    window.scrollTo(0, 0);
+    let notices = '';
+    if (res.leveled_up) notices += '<div class="level-up-banner">Level up! You reached Level ' + res.level + '.</div>';
+    if (res.points_awarded > 0) notices += '<div class="form-success">+' + res.points_awarded + ' bonus points for passing this course quiz.</div>';
+    (res.new_badges || []).forEach(b => {
+      notices += '<div class="badge-pill new-badge" style="margin-top:10px;"><span class="icon">' + esc(b.icon) + '</span><div><div class="name">New badge: ' + esc(b.name) + ' (+' + b.bonus_points + ' bonus pts)</div><div class="desc">' + esc(b.description) + '</div></div></div>';
+    });
+
+    const review = res.review.map((q, qi) => `
+      <div class="cq-question">
+        <h4>${qi + 1}. ${esc(q.question)}</h4>
+        ${q.options.map((opt, oi) => {
+          const isCorrect = oi === q.correct_index;
+          const isChosen = oi === q.chosen_index;
+          const cls = isCorrect ? 'is-correct' : (isChosen ? 'is-wrong' : '');
+          const tag = isCorrect ? (isChosen ? 'Your answer: correct' : 'Correct answer') : (isChosen ? 'Your answer' : '');
+          return '<div class="cq-option ' + cls + '"><span class="box"></span><span>' + esc(opt) + '</span>' + (tag ? '<span class="tag">' + tag + '</span>' : '') + '</div>';
+        }).join('')}
+      </div>`).join('');
+
+    container.innerHTML = `
+      <a href="course.html?id=${esc(courseId)}" class="muted" style="font-size:14px;">&larr; Back to course</a>
+      <p class="eyebrow" style="margin-top:14px;">Your result</p>
+      <div class="card" style="margin:12px 0 22px; text-align:center;">
+        <div class="score-big">${res.score}%</div>
+        <p style="margin:6px 0 4px; font-weight:600; color:var(--text, #fff);">${res.correct} of ${res.total} correct &middot; ${res.passed ? 'Passed' : 'Not passed yet (pass mark ' + res.pass_mark + '%)'}</p>
+        <p class="mono muted" style="font-size:13px; margin:0;">Best score: ${res.best_score}%</p>
+      </div>
+      ${notices}
+      <h3 style="margin:22px 0 14px;">Review your answers</h3>
+      ${review}
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <a class="btn btn-primary" href="course-quiz.html?id=${esc(courseId)}">Retake quiz</a>
+        <a class="btn btn-secondary" href="course.html?id=${esc(courseId)}">Back to course</a>
+      </div>
+    `;
+  }
+</script>
+</body>
+</html>

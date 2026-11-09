@@ -9,15 +9,52 @@ async function loadDashboard() {
   try {
     const data = await apiRequest('/dashboard', { auth: true });
 
+    const firstName = escapeHtml(String(data.user.name || '').split(' ')[0]);
+    const levelTitle = escapeHtml(data.user.level_title || '');
+    const pct = Number(data.points_into_level) || 0;
+
     document.getElementById('greeting').innerHTML = `
       <p class="eyebrow">Your progress</p>
-      <h2 style="font-size:28px;">Welcome back, ${data.user.name.split(' ')[0]}</h2>
+      <h2 style="font-size:28px;">Welcome back, ${firstName}</h2>
+      ${levelTitle ? `<p style="margin-top:-8px;"><span class="course-tag">${levelTitle}</span></p>` : ''}
+      <div class="level-bar-row">
+        <div class="level-bar-track">
+          <div class="level-bar-fill" style="width:${pct}%;">Level ${data.user.level}: ${pct}%</div>
+        </div>
+        <div class="level-bar-stars">${'★'.repeat(Math.min(Number(data.user.level) || 1, 5))}</div>
+      </div>
     `;
 
     document.getElementById('stat-points').textContent = data.user.points;
     document.getElementById('stat-level').textContent = data.user.level;
-    document.getElementById('stat-streak').textContent = `${data.user.streak_days} 🔥`;
+    document.getElementById('stat-streak').textContent = `${data.user.streak_days} days`;
     document.getElementById('stat-lessons').textContent = `${data.completed_lessons}/${data.total_lessons}`;
+
+    // "Continue where you left off" card, placed right under the stat cards.
+    const continueEl = document.createElement('div');
+    continueEl.className = 'card';
+    continueEl.style.marginBottom = '24px';
+    if (data.continue_learning) {
+      const cl = data.continue_learning;
+      continueEl.innerHTML = `
+        <p class="eyebrow" style="margin-bottom:10px;">Continue where you left off</p>
+        <a href="lesson.html?id=${cl.id}&courseId=${cl.course_id}" class="course-card" style="flex-direction:row; align-items:center; gap:14px; text-decoration:none;">
+          <span class="course-icon">${cl.course_icon || ''}</span>
+          <div style="flex:1;">
+            <div style="font-weight:600; color:var(--text);">${escapeHtml(cl.title)}</div>
+            <div class="muted" style="font-size:13px;">${escapeHtml(cl.course_title)}</div>
+          </div>
+          <span class="btn btn-primary" style="padding:8px 16px; font-size:13px;">Continue</span>
+        </a>
+      `;
+    } else {
+      continueEl.innerHTML = `
+        <p class="eyebrow" style="margin-bottom:10px;">Get started</p>
+        <p style="margin-bottom:12px;">Pick a course to begin your next lesson.</p>
+        <a href="courses.html" class="btn btn-primary">Browse Courses</a>
+      `;
+    }
+    document.querySelector('.stat-grid').insertAdjacentElement('afterend', continueEl);
 
     const courseList = document.getElementById('course-progress-list');
     if (data.course_progress.length === 0) {
@@ -26,39 +63,42 @@ async function loadDashboard() {
       courseList.innerHTML = data.course_progress.map(c => `
         <div style="margin-bottom:16px;">
           <div class="flex-between" style="margin-bottom:6px;">
-            <span style="font-weight:500;">${c.icon} ${c.title}</span>
-            <span class="mono muted" style="font-size:13px;">${c.completed_lessons}/${c.total_lessons}</span>
+            <span style="font-weight:500;">${c.icon || ''} ${escapeHtml(c.title)}</span>
+            <span class="mono muted" style="font-size:13px;">${c.completed_lessons || 0}/${c.total_lessons}</span>
           </div>
-          ${byteMeterHtml(c.completed_lessons, c.total_lessons, 'teal')}
+          ${byteMeterHtml(c.completed_lessons || 0, c.total_lessons, 'teal')}
         </div>
       `).join('');
     }
 
     const badgesList = document.getElementById('badges-list');
     if (data.badges.length === 0) {
-      badgesList.innerHTML = `<p class="muted">Complete your first lesson to earn a badge.</p>`;
+      badgesList.innerHTML = `<p class="muted">Complete your first lesson to earn a badge. (${data.total_badges} badges available)</p>`;
     } else {
-      badgesList.innerHTML = data.badges.map(b => `
-        <div class="badge-pill">
-          <span class="icon">${b.icon}</span>
-          <div>
-            <div class="name">${b.name}</div>
-            <div class="desc">${b.description}</div>
+      badgesList.innerHTML = `
+        <p class="muted mono" style="font-size:12px; margin-bottom:8px;">${data.badges.length} / ${data.total_badges} unlocked</p>
+        ${data.badges.map(b => `
+          <div class="badge-pill">
+            <span class="icon">${b.icon}</span>
+            <div>
+              <div class="name">${escapeHtml(b.name)}</div>
+              <div class="desc">${escapeHtml(b.description)}</div>
+            </div>
           </div>
-        </div>
-      `).join('');
+        `).join('')}
+      `;
     }
 
     const leaderboard = document.getElementById('leaderboard-list');
     leaderboard.innerHTML = data.leaderboard.map((u, i) => `
       <div class="flex-between" style="padding:8px 0; ${i < data.leaderboard.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : ''}">
-        <span>${i + 1}. ${u.name}</span>
+        <span>${i + 1}. ${escapeHtml(u.name)}</span>
         <span class="mono" style="color:var(--gold);">${u.points} pts</span>
       </div>
     `).join('');
 
   } catch (err) {
-    document.getElementById('greeting').innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+    document.getElementById('greeting').innerHTML = `<p class="form-error" style="display:block;">${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -70,42 +110,45 @@ async function loadRecommendations() {
     sourceLabel.textContent = data.source === 'model' ? 'AI model' : (data.source === 'fallback' ? 'fallback' : '');
 
     if (!data.recommendations || data.recommendations.length === 0) {
-      container.innerHTML = `<p class="muted">${data.note || 'No recommendations available right now.'}</p>`;
+      container.innerHTML = `<p class="muted">${escapeHtml(data.note || 'No recommendations available right now.')}</p>`;
       return;
     }
 
     container.innerHTML = data.recommendations.map(r => `
       <a href="course.html?id=${r.id}" class="course-card" style="margin-bottom:12px; display:flex; flex-direction:row; align-items:center; gap:14px; text-decoration:none;">
-        <span class="course-icon">${r.icon}</span>
+        <span class="course-icon">${r.icon || ''}</span>
         <div style="flex:1;">
-          <div style="font-weight:600; color:var(--text);">${r.title}</div>
-          <div class="muted" style="font-size:13px;">${r.reason}</div>
+          <div style="font-weight:600; color:var(--text);">${escapeHtml(r.title)}</div>
+          <div class="muted" style="font-size:13px;">${escapeHtml(r.reason || '')}</div>
         </div>
-        ${r.score !== null ? `<span class="mono" style="font-size:12px; color:var(--teal);">${Math.round(r.score * 100)}% match</span>` : ''}
+        ${r.score !== null && r.score !== undefined ? `<span class="mono" style="font-size:12px; color:var(--blue);">${Math.round(r.score * 100)}% match</span>` : ''}
       </a>
     `).join('');
   } catch (err) {
-    container.innerHTML = `<p class="muted">Couldn't load recommendations: ${err.message}</p>`;
+    container.innerHTML = `<p class="muted">Couldn't load recommendations: ${escapeHtml(err.message)}</p>`;
   }
 }
 
 function setupDeleteAccount() {
   const btn = document.getElementById('delete-account-btn');
-  btn.addEventListener('click', async () => {
-    const confirmed = confirm('Are you sure you want to permanently delete your account? This cannot be undone.');
-    if (!confirmed) return;
-
-    btn.disabled = true;
-    btn.textContent = 'Deleting...';
-    try {
-      await apiRequest('/auth/account', { method: 'DELETE', auth: true });
-      Auth.clearSession();
-      alert('Your account has been deleted.');
-      window.location.href = 'index.html';
-    } catch (err) {
-      alert('Something went wrong: ' + err.message);
-      btn.disabled = false;
-      btn.textContent = 'Delete My Account';
-    }
+  btn.addEventListener('click', () => {
+    showConfirm(
+      'Are you sure you want to permanently delete your account? This cannot be undone.',
+      async () => {
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+        try {
+          await apiRequest('/auth/account', { method: 'DELETE', auth: true });
+          Auth.clearSession();
+          showAlert('Your account has been deleted.');
+          setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+        } catch (err) {
+          showAlert('Something went wrong: ' + err.message);
+          btn.disabled = false;
+          btn.textContent = 'Delete My Account';
+        }
+      },
+      'Delete Account'
+    );
   });
 }

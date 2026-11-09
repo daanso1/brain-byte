@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Courses — Brain Byte Admin</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" id="page">
+  <a href="admin.html" class="muted" style="font-size:14px;">&larr; Back to admin panel</a>
+  <div class="flex-between" style="margin:14px 0 24px; flex-wrap:wrap; gap:12px;">
+    <div>
+      <p class="eyebrow">Admin</p>
+      <h2 style="font-size:28px; margin:0;">Manage Courses</h2>
+    </div>
+    <a href="admin-course-edit.html" class="btn btn-primary">Add Course</a>
+  </div>
+  <div class="card">
+    <div id="course-list"><p class="muted">Loading...</p></div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('admin.html');
+
+  const LEVELS = { 1: 'Beginner', 2: 'Intermediate', 3: 'Advanced' };
+
+  function esc(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function loadCourses() {
+    const list = document.getElementById('course-list');
+    try {
+      const courses = await apiRequest('/admin-courses', { auth: true });
+      if (courses.length === 0) {
+        list.innerHTML = '<p class="muted">No courses yet. Click "Add Course" to create the first one.</p>';
+        return;
+      }
+      list.innerHTML = courses.map((c, i) => `
+        <div class="flex-between" style="padding:14px 0; ${i < courses.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : ''} flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-weight:600;">${esc(c.icon || '')} ${esc(c.title)}</div>
+            <div class="muted" style="font-size:13px;">${esc(c.category)} &middot; ${esc(LEVELS[c.difficulty] || c.difficulty)} &middot; ${c.lesson_count} lesson${c.lesson_count === 1 ? '' : 's'} &middot; ${c.question_count} quiz question${c.question_count === 1 ? '' : 's'}</div>
+          </div>
+          <a href="admin-course-edit.html?id=${c.id}" class="btn btn-secondary" style="padding:8px 16px; font-size:13px;">Edit</a>
+        </div>
+      `).join('');
+    } catch (err) {
+      const msg = err.message === 'Admin access required.' ? "You don't have access to this page." : err.message;
+      document.getElementById('page').innerHTML = '<p class="form-error" style="display:block;">' + esc(msg) + '</p>';
+    }
+  }
+
+  if (requireLogin()) {
+    const u = Auth.getUser();
+    if (!u || u.role !== 'admin') {
+      document.getElementById('page').innerHTML = '<p class="form-error" style="display:block;">You don\'t have access to this page.</p>';
+    } else {
+      loadCourses();
+    }
+  }
+</script>
+</body>
+</html>

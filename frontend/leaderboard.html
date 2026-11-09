@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaderboard — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" style="max-width:600px;">
+  <p class="eyebrow">Top learners</p>
+  <h2 style="font-size:28px; margin-bottom:24px;">Leaderboard</h2>
+  <div class="card">
+    <div id="leaderboard-list"><p class="muted">Loading...</p></div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav();
+
+  async function loadLeaderboard() {
+    const container = document.getElementById('leaderboard-list');
+    try {
+      const data = await apiRequest('/dashboard/leaderboard');
+      if (data.length === 0) {
+        container.innerHTML = `<p class="muted">No learners yet — be the first!</p>`;
+        return;
+      }
+      container.innerHTML = data.map((u, i) => `
+        <div class="flex-between" style="padding:12px 0; ${i < data.length - 1 ? 'border-bottom:1px solid var(--border-subtle);' : ''}">
+          <span style="font-weight:600;">${i + 1}. ${u.name}</span>
+          <span class="mono" style="color:var(--gold);">${u.points} pts · Level ${u.level}</span>
+        </div>
+      `).join('');
+    } catch (err) {
+      container.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+    }
+  }
+  loadLeaderboard();
+</script>
+</body>
+</html>

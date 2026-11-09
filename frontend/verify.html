@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify your email — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container">
+  <div class="card form-card">
+    <p class="eyebrow">One more step</p>
+    <h2>Verify your email</h2>
+    <p id="verify-desc">We sent a 6-digit code to your email address. Enter it below to activate your account.</p>
+    <div class="form-error" id="error-box"></div>
+    <div class="form-success" id="success-box" style="display:none;"></div>
+    <form id="verify-form">
+      <div class="form-group">
+        <label for="code">Verification code</label>
+        <input type="text" id="code" required maxlength="6" placeholder="123456" style="font-size:24px; letter-spacing:6px; text-align:center;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Verify</button>
+    </form>
+    <p style="margin-top:18px; font-size:14px; text-align:center;">
+      Didn't get a code? <a href="#" id="resend-link">Resend it</a>
+    </p>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav();
+  if (!requireLogin(true)) { /* redirected to login already */ }
+
+  const user = Auth.getUser();
+  if (user && user.email_verified === 1) {
+    window.location.href = 'dashboard.html';
+  }
+  if (user) {
+    document.getElementById('verify-desc').textContent = `We sent a 6-digit code to ${user.email}. Enter it below to activate your account.`;
+  }
+
+  const form = document.getElementById('verify-form');
+  const errorBox = document.getElementById('error-box');
+  const successBox = document.getElementById('success-box');
+  const submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Verifying...';
+
+    try {
+      const result = await apiRequest('/verify', {
+        method: 'POST', auth: true,
+        body: { code: document.getElementById('code').value },
+      });
+      Auth.setSession(Auth.getToken(), { ...Auth.getUser(), email_verified: 1 });
+      successBox.textContent = 'Verified! Redirecting...';
+      successBox.style.display = 'block';
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Verify';
+    }
+  });
+
+  document.getElementById('resend-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      await apiRequest('/verify/resend', { method: 'POST', auth: true });
+      errorBox.style.display = 'none';
+      successBox.textContent = 'A new code has been sent.';
+      successBox.style.display = 'block';
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>

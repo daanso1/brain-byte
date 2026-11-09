@@ -21,6 +21,7 @@
   const lessonId = params.get('id');
   const courseId = params.get('courseId');
   const container = document.getElementById('lesson-container');
+  let selectedIndex = null;
 
   if (requireLogin()) loadLesson();
 
@@ -31,6 +32,23 @@
     }
     try {
       const lesson = await apiRequest(`/courses/lesson/${lessonId}`);
+
+      const quizHtml = lesson.quiz_question ? `
+        <div class="card" style="margin:20px 0;">
+          <p style="font-weight:600; margin-bottom:14px;">${lesson.quiz_question}</p>
+          <div id="quiz-options">
+            ${lesson.quiz_options.map((opt, i) => `
+              <button class="quiz-option" data-index="${i}" onclick="selectOption(${i})">${opt}</button>
+            `).join('')}
+          </div>
+          <button class="btn btn-primary" id="submit-quiz-btn" style="margin-top:8px;" disabled>Submit Answer</button>
+        </div>
+      ` : `
+        <div id="complete-section">
+          <button class="btn btn-primary" id="complete-btn">Mark lesson complete (+${lesson.points_value} pts)</button>
+        </div>
+      `;
+
       container.innerHTML = `
         ${courseId ? `<a href="course.html?id=${courseId}" class="muted" style="font-size:14px;">← Back to course</a>` : ''}
         <p class="eyebrow" style="margin-top:14px;">Lesson</p>
@@ -38,43 +56,88 @@
         <div class="card" style="margin:20px 0; font-size:16px; line-height:1.7;">
           ${lesson.content}
         </div>
-        <div id="complete-section">
-          <button class="btn btn-primary" id="complete-btn">Mark lesson complete (+${lesson.points_value} pts)</button>
-        </div>
+        ${quizHtml}
         <div id="feedback"></div>
       `;
 
-      document.getElementById('complete-btn').addEventListener('click', async () => {
-        const btn = document.getElementById('complete-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-        try {
-          const result = await apiRequest(`/progress/complete/${lessonId}`, { method: 'POST', auth: true, body: {} });
-          renderFeedback(result);
-        } catch (err) {
-          document.getElementById('feedback').innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
-          btn.disabled = false;
-          btn.textContent = 'Mark lesson complete';
-        }
-      });
+      if (lesson.quiz_question) {
+        document.getElementById('submit-quiz-btn').addEventListener('click', () => submitQuiz(lessonId));
+      } else {
+        document.getElementById('complete-btn').addEventListener('click', () => submitQuiz(lessonId, true));
+      }
 
     } catch (err) {
       container.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
     }
   }
 
+  function selectOption(index) {
+    selectedIndex = index;
+    document.querySelectorAll('.quiz-option').forEach((btn, i) => {
+      btn.classList.toggle('selected', i === index);
+      btn.classList.remove('correct', 'incorrect');
+    });
+    document.getElementById('submit-quiz-btn').disabled = false;
+  }
+
+  async function submitQuiz(lessonId, noQuiz = false) {
+    const btn = noQuiz ? document.getElementById('complete-btn') : document.getElementById('submit-quiz-btn');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+
+    try {
+      const body = noQuiz ? {} : { answer_index: selectedIndex };
+      const result = await apiRequest(`/progress/complete/${lessonId}`, { method: 'POST', auth: true, body });
+
+      if (result.correct === false) {
+        document.querySelectorAll('.quiz-option').forEach((el, i) => {
+          if (i === selectedIndex) el.classList.add('incorrect');
+        });
+        document.getElementById('feedback').innerHTML = `<p style="color:var(--coral); font-weight:600; margin-top:10px;">${result.message}</p>`;
+        btn.disabled = false;
+        btn.textContent = 'Submit Answer';
+        return;
+      }
+
+      if (!noQuiz) {
+        document.querySelectorAll('.quiz-option').forEach((el, i) => {
+          if (i === selectedIndex) el.classList.add('correct');
+        });
+        document.getElementById('quiz-options').querySelectorAll('button').forEach(b => b.disabled = true);
+        btn.style.display = 'none';
+      }
+
+      renderFeedback(result);
+    } catch (err) {
+      document.getElementById('feedback').innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+      btn.disabled = false;
+      btn.textContent = noQuiz ? 'Mark lesson complete' : 'Submit Answer';
+    }
+  }
+
   function renderFeedback(result) {
     const feedback = document.getElementById('feedback');
-    document.getElementById('complete-section').innerHTML = `<p style="color:var(--teal); font-weight:600;">✓ Lesson completed</p>`;
+    let html = '';
 
-    let html = `<div class="form-success">+${result.points_earned || 0} points earned${result.leveled_up ? ` — you reached Level ${result.level}! 🎉` : ''}</div>`;
+    if (result.already_completed) {
+      html = `<p style="color:var(--blue); font-weight:600; margin-top:10px;">✓ Already completed</p>`;
+      if (courseId) html += `<a href="course.html?id=${courseId}" class="btn btn-secondary" style="margin-top:12px;">Back to course</a>`;
+      feedback.innerHTML = html;
+      return;
+    }
+
+    if (result.leveled_up) {
+      html += `<div class="level-up-banner">🎉 Level Up! You reached Level ${result.level}!</div>`;
+    }
+
+    html += `<div class="form-success">✓ Correct! +${result.points_earned || 0} points earned</div>`;
 
     if (result.new_badges && result.new_badges.length > 0) {
       html += result.new_badges.map(b => `
-        <div class="badge-pill" style="margin-top:10px;">
+        <div class="badge-pill new-badge" style="margin-top:10px;">
           <span class="icon">${b.icon}</span>
           <div>
-            <div class="name">New badge: ${b.name}</div>
+            <div class="name">New badge: ${b.name} (+${b.bonus_points} bonus pts)</div>
             <div class="desc">${b.description}</div>
           </div>
         </div>

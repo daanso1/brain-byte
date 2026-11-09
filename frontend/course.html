@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Course — Brain Byte</title>
 <link rel="stylesheet" href="css/style.css">
+<style>
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+  .meta-chip {
+    font-family: var(--font-mono, monospace); font-size: 13px;
+    padding: 6px 12px; border-radius: 100px;
+    background: var(--bg-elevated-2, rgba(255,255,255,0.06));
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.14));
+    color: var(--text-muted, #a79fc4);
+  }
+  .detail-block { margin-top: 28px; }
+  .detail-block h3 { font-size: 18px; margin-bottom: 12px; }
+  .outcome-list { list-style: none; padding: 0; margin: 0; }
+  .outcome-list li { position: relative; padding-left: 28px; margin-bottom: 10px; color: var(--text, #f5f3fb); }
+  .outcome-list li::before { content: '\2713'; position: absolute; left: 0; font-weight: 700; color: var(--purple, #a78bfa); }
+</style>
 </head>
 <body>
 <nav class="site-nav" id="site-nav"></nav>
@@ -20,47 +35,111 @@
   const params = new URLSearchParams(window.location.search);
   const courseId = params.get('id');
   const container = document.getElementById('course-container');
+  const LEVELS = { 1: 'Beginner', 2: 'Intermediate', 3: 'Advanced' };
+
+  function esc(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function parseList(raw) {
+    if (Array.isArray(raw)) return raw;
+    try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : []; } catch (e) { return []; }
+  }
 
   async function loadCourse() {
     if (!courseId) {
-      container.innerHTML = `<p class="form-error" style="display:block;">No course specified.</p>`;
+      container.innerHTML = '<p class="form-error" style="display:block;">No course specified.</p>';
       return;
     }
     try {
-      const headers = {};
-      const course = await apiRequest(`/courses/${courseId}`, { auth: true });
+      const course = await apiRequest('/courses/' + courseId, { auth: true });
 
-      const completed = course.lessons.filter(l => l.completed).length;
-      const total = course.lessons.length;
+      // The quiz summary is optional: if it is unavailable the page still works.
+      let quizInfo = null;
+      try { quizInfo = await apiRequest('/course-quiz/' + courseId + '/info', { auth: true }); } catch (e) { quizInfo = null; }
+
+      const lessons = course.lessons || [];
+      const completed = lessons.filter(l => l.completed).length;
+      const total = lessons.length;
+      const totalPoints = lessons.reduce((sum, l) => sum + (Number(l.points_value) || 0), 0);
+      const outcomes = parseList(course.learning_outcomes);
+
+      const chips = [
+        LEVELS[course.difficulty] || ('Level ' + course.difficulty),
+        total + (total === 1 ? ' lesson' : ' lessons'),
+        course.estimated_hours ? ('About ' + course.estimated_hours + ' hours') : null,
+        totalPoints + ' points available',
+      ].filter(Boolean).map(c => '<span class="meta-chip">' + esc(c) + '</span>').join('');
+
+      let quizHtml = '';
+      if (quizInfo && quizInfo.question_count > 0) {
+        const r = quizInfo.result;
+        quizHtml = `
+          <div class="card" style="margin-top:32px;">
+            <p class="eyebrow">Course quiz</p>
+            <h3 style="margin-bottom:8px;">Test what you have learned</h3>
+            <p>${quizInfo.question_count} multiple-choice questions. Score ${quizInfo.pass_mark}% or more to pass and earn ${quizInfo.pass_points} bonus points the first time you do.</p>
+            ${r ? `<p class="mono" style="font-size:13px;">Best score: ${r.best_score}% &middot; ${r.attempts} attempt${r.attempts === 1 ? '' : 's'} &middot; ${r.passed ? 'Passed' : 'Not passed yet'}</p>` : ''}
+            <a class="btn btn-primary" href="course-quiz.html?id=${course.id}">${r ? 'Retake the quiz' : 'Take the quiz'}</a>
+          </div>`;
+      }
 
       container.innerHTML = `
-        <div style="max-width:720px;">
-          <p class="eyebrow">${course.category} · Difficulty ${course.difficulty}/3</p>
-          <h2 style="font-size:30px;">${course.icon} ${course.title}</h2>
-          <p style="font-size:16px;">${course.description}</p>
+        <div style="max-width:760px;">
+          <p class="eyebrow">${esc(course.category)}</p>
+          <h2 style="font-size:30px;">${esc(course.icon || '')} ${esc(course.title)}</h2>
+          <p style="font-size:16px;">${esc(course.description)}</p>
+          <div class="meta-row">${chips}</div>
 
-          <div class="byte-meter-row" style="margin:20px 0 32px;">
-            ${byteMeterHtml(completed, total, 'teal')}
-            <span class="byte-meter-label">${completed}/${total} lessons complete</span>
+          ${course.overview ? `
+            <div class="detail-block">
+              <h3>About this course</h3>
+              <p style="font-size:15px; line-height:1.7;">${esc(course.overview)}</p>
+            </div>` : ''}
+
+          ${outcomes.length ? `
+            <div class="detail-block">
+              <h3>What you will learn</h3>
+              <ul class="outcome-list">${outcomes.map(o => '<li>' + esc(o) + '</li>').join('')}</ul>
+            </div>` : ''}
+
+          ${course.prerequisites ? `
+            <div class="detail-block">
+              <h3>Before you start</h3>
+              <p>${esc(course.prerequisites)}</p>
+            </div>` : ''}
+
+          <div class="detail-block">
+            <h3>Your progress</h3>
+            <div class="byte-meter-row">
+              ${byteMeterHtml(completed, total, 'teal')}
+              <span class="byte-meter-label">${completed}/${total} lessons complete</span>
+            </div>
           </div>
 
-          <h3 style="margin-bottom:16px;">Lessons</h3>
-          <div id="lessons-list"></div>
+          <div class="detail-block">
+            <h3>Lessons</h3>
+            <div id="lessons-list"></div>
+          </div>
+
+          ${quizHtml}
         </div>
       `;
 
-      document.getElementById('lessons-list').innerHTML = course.lessons.map(l => `
+      document.getElementById('lessons-list').innerHTML = lessons.map(l => `
         <div class="lesson-list-item ${l.completed ? 'completed' : ''}">
           <div style="display:flex; align-items:center; gap:12px;">
-            <span class="check-dot ${l.completed ? 'done' : ''}">${l.completed ? '✓' : ''}</span>
-            <a href="lesson.html?id=${l.id}&courseId=${course.id}">${l.title}</a>
+            <span class="check-dot ${l.completed ? 'done' : ''}">${l.completed ? '&#10003;' : ''}</span>
+            <a href="lesson.html?id=${l.id}&courseId=${course.id}">${esc(l.title)}</a>
           </div>
           <span class="mono muted" style="font-size:13px;">+${l.points_value} pts</span>
         </div>
-      `).join('');
+      `).join('') || '<p class="muted">No lessons have been added to this course yet.</p>';
 
     } catch (err) {
-      container.innerHTML = `<p class="form-error" style="display:block;">${err.message}</p>`;
+      container.innerHTML = '<p class="form-error" style="display:block;">' + esc(err.message) + '</p>';
     }
   }
   loadCourse();

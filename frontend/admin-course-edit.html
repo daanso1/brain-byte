@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Course — Brain Byte Admin</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .row2, .row3 { grid-template-columns: 1fr; } }
+  .hint { font-size: 12px; color: var(--text-faint, #766f96); margin-top: 4px; }
+  .item-box {
+    padding: 14px 16px; margin-bottom: 12px; border-radius: 12px;
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.14));
+    background: var(--bg-elevated-2, rgba(255,255,255,0.05));
+  }
+  .opt-line { padding: 6px 10px; margin-top: 6px; border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.04); }
+  .opt-line.correct { border: 1px solid #22c55e; background: rgba(34,197,94,0.10); font-weight: 600; }
+  .section-title { margin: 0; font-size: 20px; }
+  .msg { margin: 12px 0 0; display: none; }
+</style>
+</head>
+<body>
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container section" id="page" style="max-width:860px;">
+  <a href="admin-courses.html" class="muted" style="font-size:14px;">&larr; Back to courses</a>
+  <p class="eyebrow" style="margin-top:14px;">Admin</p>
+  <h2 id="page-title" style="font-size:28px;">Course</h2>
+  <div id="page-message" class="form-success" style="display:none;"></div>
+
+  <div class="card" style="margin-bottom:28px;">
+    <h3 class="section-title" style="margin-bottom:18px;">Course details</h3>
+
+    <div class="row3">
+      <div class="form-group"><label for="f-title">Title</label><input type="text" id="f-title" maxlength="120"></div>
+      <div class="form-group"><label for="f-category">Category</label><input type="text" id="f-category" maxlength="40" list="category-options">
+        <datalist id="category-options"><option value="Foundations"></option><option value="Web Development"></option><option value="Programming"></option><option value="Tools"></option><option value="Cybersecurity"></option><option value="Data"></option><option value="Career"></option></datalist></div>
+      <div class="form-group"><label for="f-icon">Icon</label><input type="text" id="f-icon" maxlength="8" placeholder="an emoji"></div>
+    </div>
+
+    <div class="row3">
+      <div class="form-group"><label for="f-tags">Tags</label><input type="text" id="f-tags" placeholder="comma, separated, keywords"></div>
+      <div class="form-group"><label for="f-difficulty">Level</label>
+        <select id="f-difficulty"><option value="1">Beginner</option><option value="2">Intermediate</option><option value="3">Advanced</option></select></div>
+      <div class="form-group"><label for="f-hours">Hours</label><input type="number" id="f-hours" min="1" max="200" placeholder="e.g. 5"></div>
+    </div>
+
+    <div class="form-group"><label for="f-description">Short description</label>
+      <textarea id="f-description" rows="2" maxlength="500"></textarea>
+      <div class="hint">Shown on the course card. Maximum 500 characters.</div></div>
+
+    <div class="form-group"><label for="f-overview">Overview (in-depth)</label>
+      <textarea id="f-overview" rows="6" maxlength="4000"></textarea>
+      <div class="hint">Shown at the top of the course page under "About this course".</div></div>
+
+    <div class="form-group"><label for="f-outcomes">What learners will learn</label>
+      <textarea id="f-outcomes" rows="5"></textarea>
+      <div class="hint">One outcome per line (maximum 12).</div></div>
+
+    <div class="form-group"><label for="f-prereq">Prerequisites</label><input type="text" id="f-prereq" maxlength="300"></div>
+
+    <div class="form-error msg" id="course-error"></div>
+    <button class="btn btn-primary" id="save-course-btn">Save course</button>
+  </div>
+
+  <div id="lessons-section"></div>
+  <div id="questions-section"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  renderNav('admin.html');
+
+  const params = new URLSearchParams(window.location.search);
+  const courseId = params.get('id');
+  const LETTERS = ['A', 'B', 'C', 'D'];
+  let state = null;
+
+  // ---------- small helpers (kept local so this page needs nothing extra from api.js) ----------
+  function esc(value) {
+    return String(value === undefined || value === null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  const val = (id) => document.getElementById(id).value;
+
+  function showMessage(text) {
+    const el = document.getElementById('page-message');
+    el.textContent = text;
+    el.style.display = 'block';
+    window.scrollTo(0, 0);
+  }
+
+  function showError(elId, text) {
+    const el = document.getElementById(elId);
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+
+  function hideError(elId) {
+    const el = document.getElementById(elId);
+    if (el) el.style.display = 'none';
+  }
+
+  function ask(message, onYes, title) {
+    if (typeof showConfirm === 'function') showConfirm(message, onYes, title || '');
+    else if (window.confirm(message)) onYes();
+  }
+
+  // ---------- course details ----------
+  function fillCourseForm(c) {
+    document.getElementById('f-title').value = c.title || '';
+    document.getElementById('f-category').value = c.category || '';
+    document.getElementById('f-icon').value = c.icon || '';
+    document.getElementById('f-tags').value = c.tags || '';
+    document.getElementById('f-difficulty').value = String(c.difficulty || 1);
+    document.getElementById('f-hours').value = c.estimated_hours || '';
+    document.getElementById('f-description').value = c.description || '';
+    document.getElementById('f-overview').value = c.overview || '';
+    document.getElementById('f-outcomes').value = (c.learning_outcomes || []).join('\n');
+    document.getElementById('f-prereq').value = c.prerequisites || '';
+  }
+
+  function collectCourse() {
+    return {
+      title: val('f-title'),
+      category: val('f-category'),
+      icon: val('f-icon'),
+      tags: val('f-tags'),
+      difficulty: Number(val('f-difficulty')),
+      estimated_hours: val('f-hours'),
+      description: val('f-description'),
+      overview: val('f-overview'),
+      learning_outcomes: val('f-outcomes'),
+      prerequisites: val('f-prereq'),
+    };
+  }
+
+  async function saveCourse() {
+    hideError('course-error');
+    const btn = document.getElementById('save-course-btn');
+    btn.disabled = true;
+    try {
+      if (courseId) {
+        await apiRequest('/admin-courses/' + courseId, { method: 'PUT', auth: true, body: collectCourse() });
+        await load();
+        showMessage('Course details saved.');
+      } else {
+        const created = await apiRequest('/admin-courses', { method: 'POST', auth: true, body: collectCourse() });
+        window.location.href = 'admin-course-edit.html?id=' + created.id + '&created=1';
+        return;
+      }
+    } catch (err) {
+      showError('course-error', err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ---------- lessons ----------
+  function lessonFormHtml(prefix, l) {
+    const opts = (l && l.quiz_options) || ['', '', '', ''];
+    const correct = l && l.quiz_correct_index !== null && l.quiz_correct_index !== undefined ? l.quiz_correct_index : 0;
+    return `
+      <div class="form-group"><label>Lesson title</label><input type="text" id="${prefix}-title" maxlength="120" value="${esc(l ? l.title : '')}"></div>
+      <div class="form-group"><label>Lesson content</label><textarea id="${prefix}-content" rows="6">${esc(l ? l.content : '')}</textarea></div>
+      <div class="form-group" style="max-width:200px;"><label>Points for completing</label><input type="number" id="${prefix}-points" min="1" max="100" value="${l ? l.points_value : 10}"></div>
+      <p style="margin:14px 0 8px; font-weight:600; color:var(--text, #fff);">Lesson quiz question <span class="muted" style="font-weight:400;">(optional: leave blank for none)</span></p>
+      <div class="form-group"><input type="text" id="${prefix}-qq" maxlength="400" placeholder="Question" value="${esc(l && l.quiz_question ? l.quiz_question : '')}"></div>
+      ${[0, 1, 2, 3].map(i => `<div class="form-group"><input type="text" id="${prefix}-o${i}" maxlength="200" placeholder="Answer option ${LETTERS[i]}" value="${esc(opts[i] || '')}"></div>`).join('')}
+      <div class="form-group" style="max-width:220px;"><label>Correct answer</label>
+        <select id="${prefix}-correct">${[0, 1, 2, 3].map(i => `<option value="${i}" ${i === correct ? 'selected' : ''}>Option ${LETTERS[i]}</option>`).join('')}</select></div>
+      <div class="form-error msg" id="${prefix}-error"></div>`;
+  }
+
+  function collectLesson(prefix) {
+    return {
+      title: val(prefix + '-title'),
+      content: val(prefix + '-content'),
+      points_value: val(prefix + '-points'),
+      quiz_question: val(prefix + '-qq'),
+      quiz_options: [0, 1, 2, 3].map(i => val(prefix + '-o' + i)),
+      quiz_correct_index: Number(val(prefix + '-correct')),
+    };
+  }
+
+  function renderLessons() {
+    const section = document.getElementById('lessons-section');
+    if (!courseId) { section.innerHTML = ''; return; }
+    const lessons = state.lessons || [];
+    section.innerHTML = `
+      <div class="card" style="margin-bottom:28px;">
+        <div class="flex-between" style="margin-bottom:16px;">
+          <h3 class="section-title">Lessons (${lessons.length})</h3>
+          <button class="btn btn-secondary" id="toggle-new-lesson" style="padding:8px 16px; font-size:13px;">Add lesson</button>
+        </div>
+        <div id="new-lesson-box" style="display:none;" class="item-box">
+          <h4 style="margin-bottom:12px;">New lesson</h4>
+          ${lessonFormHtml('nl', null)}
+          <button class="btn btn-primary" id="save-new-lesson">Add lesson</button>
+        </div>
+        ${lessons.length === 0 ? '<p class="muted">This course has no lessons yet. Learners will not see anything to study until you add one.</p>' : ''}
+        ${lessons.map(l => `
+          <div class="item-box" id="lesson-box-${l.id}">
+            <div class="flex-between" style="gap:10px; flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:600;">${l.order_index}. ${esc(l.title)}</div>
+                <div class="muted" style="font-size:13px;">${l.points_value} points &middot; ${l.quiz_question ? 'has a quiz question' : 'no quiz question'}</div>
+              </div>
+              <button class="btn btn-secondary" data-edit-lesson="${l.id}" style="padding:6px 14px; font-size:13px;">Edit</button>
+            </div>
+            <div id="lesson-editor-${l.id}" style="display:none; margin-top:14px;"></div>
+          </div>`).join('')}
+      </div>`;
+
+    document.getElementById('toggle-new-lesson').addEventListener('click', () => {
+      const box = document.getElementById('new-lesson-box');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('save-new-lesson').addEventListener('click', addLesson);
+    document.querySelectorAll('[data-edit-lesson]').forEach(btn => {
+      btn.addEventListener('click', () => openLessonEditor(Number(btn.dataset.editLesson)));
+    });
+  }
+
+  function openLessonEditor(lessonId) {
+    const lesson = state.lessons.find(l => l.id === lessonId);
+    const box = document.getElementById('lesson-editor-' + lessonId);
+    if (box.style.display === 'block') { box.style.display = 'none'; return; }
+    box.innerHTML = lessonFormHtml('el' + lessonId, lesson) +
+      `<button class="btn btn-primary" id="save-lesson-${lessonId}">Save lesson</button>`;
+    box.style.display = 'block';
+    document.getElementById('save-lesson-' + lessonId).addEventListener('click', () => updateLesson(lessonId));
+  }
+
+  async function addLesson() {
+    hideError('nl-error');
+    try {
+      await apiRequest('/admin-courses/' + courseId + '/lessons', { method: 'POST', auth: true, body: collectLesson('nl') });
+      await load();
+      showMessage('Lesson added.');
+    } catch (err) {
+      showError('nl-error', err.message);
+    }
+  }
+
+  async function updateLesson(lessonId) {
+    const prefix = 'el' + lessonId;
+    hideError(prefix + '-error');
+    try {
+      await apiRequest('/admin-courses/lessons/' + lessonId, { method: 'PUT', auth: true, body: collectLesson(prefix) });
+      await load();
+      showMessage('Lesson saved.');
+    } catch (err) {
+      showError(prefix + '-error', err.message);
+    }
+  }
+
+  // ---------- course quiz questions ----------
+  function renderQuestions() {
+    const section = document.getElementById('questions-section');
+    if (!courseId) { section.innerHTML = ''; return; }
+    const questions = state.questions || [];
+    section.innerHTML = `
+      <div class="card" style="margin-bottom:28px;">
+        <h3 class="section-title" style="margin-bottom:6px;">Course quiz questions (${questions.length})</h3>
+        <p class="muted" style="margin-bottom:16px;">Learners take these as one quiz from the course page. Pass mark is 60%.</p>
+        ${questions.length === 0 ? '<p class="muted">No questions yet, so learners will not see a course quiz.</p>' : ''}
+        ${questions.map((q, qi) => `
+          <div class="item-box">
+            <div class="flex-between" style="gap:10px; align-items:flex-start;">
+              <div style="font-weight:600; flex:1;">${qi + 1}. ${esc(q.question)}</div>
+              <button class="btn btn-secondary" data-del-question="${q.id}" style="padding:6px 14px; font-size:13px; color:var(--coral, #ef4444); border-color:var(--coral, #ef4444);">Delete</button>
+            </div>
+            ${q.options.map((o, oi) => `<div class="opt-line ${oi === q.correct_index ? 'correct' : ''}">${LETTERS[oi]}. ${esc(o)}${oi === q.correct_index ? ' &nbsp;(correct)' : ''}</div>`).join('')}
+          </div>`).join('')}
+
+        <div class="item-box" style="margin-top:18px;">
+          <h4 style="margin-bottom:12px;">Add a question</h4>
+          <div class="form-group"><input type="text" id="nq-question" maxlength="400" placeholder="Question"></div>
+          ${[0, 1, 2, 3].map(i => `<div class="form-group"><input type="text" id="nq-o${i}" maxlength="200" placeholder="Answer option ${LETTERS[i]}"></div>`).join('')}
+          <div class="form-group" style="max-width:220px;"><label>Correct answer</label>
+            <select id="nq-correct">${[0, 1, 2, 3].map(i => `<option value="${i}">Option ${LETTERS[i]}</option>`).join('')}</select></div>
+          <div class="form-error msg" id="nq-error"></div>
+          <button class="btn btn-primary" id="add-question-btn">Add question</button>
+        </div>
+      </div>`;
+
+    document.getElementById('add-question-btn').addEventListener('click', addQuestion);
+    document.querySelectorAll('[data-del-question]').forEach(btn => {
+      btn.addEventListener('click', () => deleteQuestion(Number(btn.dataset.delQuestion)));
+    });
+  }
+
+  async function addQuestion() {
+    hideError('nq-error');
+    try {
+      await apiRequest('/admin-courses/' + courseId + '/questions', {
+        method: 'POST', auth: true,
+        body: {
+          question: val('nq-question'),
+          options: [0, 1, 2, 3].map(i => val('nq-o' + i)),
+          correct_index: Number(val('nq-correct')),
+        },
+      });
+      await load();
+      showMessage('Question added.');
+    } catch (err) {
+      showError('nq-error', err.message);
+    }
+  }
+
+  function deleteQuestion(questionId) {
+    ask('Delete this quiz question?', async () => {
+      try {
+        await apiRequest('/admin-courses/questions/' + questionId, { method: 'DELETE', auth: true });
+        await load();
+        showMessage('Question deleted.');
+      } catch (err) {
+        showMessage('Error: ' + err.message);
+      }
+    }, 'Delete question');
+  }
+
+  // ---------- loading ----------
+  async function load() {
+    state = await apiRequest('/admin-courses/' + courseId, { auth: true });
+    document.getElementById('page-title').textContent = 'Edit: ' + state.title;
+    fillCourseForm(state);
+    renderLessons();
+    renderQuestions();
+  }
+
+  document.getElementById('save-course-btn').addEventListener('click', saveCourse);
+
+  async function start() {
+    if (!requireLogin()) return;
+    const u = Auth.getUser();
+    if (!u || u.role !== 'admin') {
+      document.getElementById('page').innerHTML = '<p class="form-error" style="display:block;">You don\'t have access to this page.</p>';
+      return;
+    }
+    if (courseId) {
+      try {
+        await load();
+        if (params.get('created')) showMessage('Course created. Now add its lessons and quiz questions below.');
+      } catch (err) {
+        const msg = err.message === 'Admin access required.' ? "You don't have access to this page." : err.message;
+        document.getElementById('page').innerHTML = '<p class="form-error" style="display:block;">' + esc(msg) + '</p>';
+      }
+    } else {
+      document.getElementById('page-title').textContent = 'Add a course';
+      document.getElementById('save-course-btn').textContent = 'Create course';
+      const hint = document.createElement('p');
+      hint.className = 'muted';
+      hint.textContent = 'Fill in the details and create the course first. You can then add its lessons and quiz questions.';
+      document.getElementById('page-title').insertAdjacentElement('afterend', hint);
+    }
+  }
+  start();
+</script>
+</body>
+</html>

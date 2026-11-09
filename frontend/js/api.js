@@ -1,6 +1,3 @@
-// Small fetch wrapper shared by every page. Keeps auth token handling
-// and error formatting in one place instead of repeating it everywhere.
-
 const API_BASE = '/api';
 
 const Auth = {
@@ -31,6 +28,7 @@ async function apiRequest(path, { method = 'GET', body, auth = false } = {}) {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
   });
 
   let data = null;
@@ -43,41 +41,58 @@ async function apiRequest(path, { method = 'GET', body, auth = false } = {}) {
   return data;
 }
 
-// Renders the shared nav based on login state. Every page includes a
-// <nav id="site-nav"></nav> placeholder and calls this on load.
+// Escapes text before it is placed into innerHTML. Anything a user can type
+// (their name, their email) must go through this so it can never run as code.
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderNav(activePage = '') {
   const nav = document.getElementById('site-nav');
   if (!nav) return;
 
   const user = Auth.getUser();
-  const links = [
-    ['courses.html', 'Courses'],
-    ['dashboard.html', 'Dashboard'],
-  ];
+  const homeHref = user ? 'dashboard.html' : 'index.html';
 
-  const linksHtml = links.map(([href, label]) =>
-    `<a href="${href}" ${activePage === href ? 'style="color:var(--text)"' : ''}>${label}</a>`
+  const links = [
+    ['home', homeHref, 'Home'],
+    ['courses.html', 'courses.html', 'Courses'],
+    ['dashboard.html', 'dashboard.html', 'Dashboard'],
+    ['leaderboard.html', 'leaderboard.html', 'Leaderboard'],
+  ];
+  if (user && user.role === 'admin') {
+    links.push(['admin.html', 'admin.html', 'Admin']);
+  }
+
+  const linksHtml = links.map(([key, href, label]) =>
+    `<a href="${href}" class="sidebar-link ${activePage === key ? 'active' : ''}">${label}</a>`
   ).join('');
 
-  const rightHtml = user
-    ? `<div class="nav-user">
-         <span class="nav-points">${user.name.split(' ')[0]}</span>
-         <button class="btn btn-secondary" id="logout-btn" style="padding:8px 14px;font-size:13px;">Log out</button>
+  const firstName = user ? escapeHtml(String(user.name || '').split(' ')[0]) : '';
+
+  const bottomHtml = user
+    ? `<div class="sidebar-user">
+         <span class="nav-points">${firstName}</span>
+         <button class="btn btn-secondary" id="logout-btn" style="width:100%;">Log out</button>
        </div>`
-    : `<div class="nav-user">
-         <a href="login.html" class="btn btn-secondary" style="padding:8px 16px;font-size:14px;">Log in</a>
-         <a href="register.html" class="btn btn-primary" style="padding:8px 16px;font-size:14px;">Sign up</a>
+    : `<div class="sidebar-user">
+         <a href="login.html" class="btn btn-secondary" style="width:100%;">Log in</a>
+         <a href="register.html" class="btn btn-primary" style="width:100%;">Sign up</a>
        </div>`;
 
   nav.innerHTML = `
-    <div class="container">
-      <a href="index.html" class="brand">
-        <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
-        Brain Byte
+    <div class="sidebar-top">
+      <a href="${homeHref}" class="brand">
+        <img src="assets/logo.jpg" alt="Brain Byte logo">
       </a>
-      <div class="nav-links">${linksHtml}</div>
-      ${rightHtml}
     </div>
+    <div class="sidebar-links">${linksHtml}</div>
+    <div class="sidebar-bottom">${bottomHtml}</div>
   `;
 
   const logoutBtn = document.getElementById('logout-btn');
@@ -89,16 +104,19 @@ function renderNav(activePage = '') {
   }
 }
 
-// Redirects to login if not authenticated. Call at the top of protected pages.
-function requireLogin() {
+function requireLogin(skipVerifiedCheck = false) {
   if (!Auth.isLoggedIn()) {
     window.location.href = 'login.html';
+    return false;
+  }
+  const user = Auth.getUser();
+  if (!skipVerifiedCheck && user && user.email_verified === 0) {
+    window.location.href = 'verify.html';
     return false;
   }
   return true;
 }
 
-// Builds the byte-meter HTML (signature component): `filled` out of `total` (capped at 8 bits).
 function byteMeterHtml(filled, total, variant = '') {
   const bits = 8;
   const ratio = total > 0 ? filled / total : 0;
@@ -109,4 +127,42 @@ function byteMeterHtml(filled, total, variant = '') {
   }
   html += `</span>`;
   return html;
+}
+
+// Styled pop-up dialogs that replace the browser's plain alert() / confirm().
+function showModal({ title = '', message, confirmText = 'OK', cancelText = null, onConfirm = null }) {
+  const existing = document.getElementById('bb-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'bb-modal-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box card">
+      ${title ? `<h3 style="margin-bottom:10px;">${escapeHtml(title)}</h3>` : ''}
+      <p style="margin-bottom:20px;">${escapeHtml(message)}</p>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        ${cancelText ? `<button class="btn btn-secondary" id="bb-modal-cancel">${escapeHtml(cancelText)}</button>` : ''}
+        <button class="btn btn-primary" id="bb-modal-confirm">${escapeHtml(confirmText)}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('bb-modal-confirm').addEventListener('click', () => {
+    overlay.remove();
+    if (onConfirm) onConfirm();
+  });
+  const cancelBtn = document.getElementById('bb-modal-cancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => overlay.remove());
+  }
+}
+
+function showAlert(message, title = '') {
+  showModal({ title, message, confirmText: 'OK' });
+}
+
+function showConfirm(message, onConfirm, title = '') {
+  showModal({ title, message, confirmText: 'Confirm', cancelText: 'Cancel', onConfirm });
 }

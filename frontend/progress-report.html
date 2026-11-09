@@ -1,0 +1,268 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Report — Brain Byte</title>
+<link rel="stylesheet" href="css/style.css">
+
+<style>
+.report-container {
+  max-width: 900px;
+  margin: 35px auto;
+}
+
+.report-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.report-section {
+  margin-bottom: 24px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.report-table th,
+.report-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.report-table th {
+  background: var(--surface);
+}
+
+.report-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.report-stat {
+  padding: 18px;
+  background: var(--surface);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.report-stat strong {
+  display: block;
+  font-size: 25px;
+  margin-bottom: 5px;
+}
+
+.report-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 600px) {
+  .report-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .report-table {
+    font-size: 12px;
+  }
+}
+
+@media print {
+  nav,
+  .report-actions {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .report-container {
+    margin: 0;
+    max-width: 100%;
+  }
+
+  .card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .report-section {
+    break-inside: avoid;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<nav class="site-nav" id="site-nav"></nav>
+
+<div class="container report-container">
+
+  <div class="report-actions">
+    <a href="dashboard.html" class="btn">← Back to Dashboard</a>
+    <button class="btn btn-primary" onclick="window.print()">
+      🖨 Print / Save as PDF
+    </button>
+  </div>
+
+  <div id="report-content">
+    <p class="muted">Generating your progress report...</p>
+  </div>
+
+</div>
+
+<script src="js/api.js"></script>
+
+<script>
+renderNav('progress-report.html');
+
+if (requireLogin()) {
+  loadProgressReport();
+}
+
+async function loadProgressReport() {
+  const container = document.getElementById('report-content');
+
+  try {
+    const data = await apiRequest('/dashboard', { auth: true });
+
+    const user = data.user;
+    const courses = data.course_progress || [];
+    const badges = data.badges || [];
+
+    const completed = Number(data.completed_lessons) || 0;
+    const total = Number(data.total_lessons) || 0;
+
+    const percentage = total > 0
+      ? Math.round((completed / total) * 100)
+      : 0;
+
+    const reportDate = new Date().toLocaleDateString();
+
+    container.innerHTML = `
+      <div class="report-header">
+        <h1>Brain Byte</h1>
+        <h2>Learner Progress Report</h2>
+        <p class="muted">Generated on ${reportDate}</p>
+      </div>
+
+      <div class="card report-section">
+        <h3>Learner Information</h3>
+        <p><strong>Name:</strong> ${escapeHtml(user.name || '')}</p>
+        <p><strong>Email:</strong> ${escapeHtml(user.email || '')}</p>
+        <p><strong>Current Level:</strong> ${escapeHtml(String(user.level || 1))}</p>
+      </div>
+
+      <div class="report-section">
+        <h3>Learning Summary</h3>
+
+        <div class="report-stat-grid">
+          <div class="report-stat">
+            <strong>${user.points || 0}</strong>
+            <span>Total Points</span>
+          </div>
+
+          <div class="report-stat">
+            <strong>${user.level || 1}</strong>
+            <span>Current Level</span>
+          </div>
+
+          <div class="report-stat">
+            <strong>${completed}/${total}</strong>
+            <span>Lessons Completed</span>
+          </div>
+
+          <div class="report-stat">
+            <strong>${percentage}%</strong>
+            <span>Overall Progress</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <p><strong>Learning Streak:</strong> ${user.streak_days || 0} days</p>
+          <p><strong>Badges Earned:</strong> ${badges.length}</p>
+        </div>
+      </div>
+
+      <div class="card report-section">
+        <h3>Course Progress</h3>
+
+        ${courses.length === 0
+          ? '<p>No course activity recorded yet.</p>'
+          : `
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Lessons Completed</th>
+                  <th>Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${courses.map(course => {
+                  const done = Number(course.completed_lessons) || 0;
+                  const totalLessons = Number(course.total_lessons) || 0;
+                  const coursePct = totalLessons > 0
+                    ? Math.round((done / totalLessons) * 100)
+                    : 0;
+
+                  return `
+                    <tr>
+                      <td>${escapeHtml(course.title || '')}</td>
+                      <td>${done}/${totalLessons}</td>
+                      <td>${coursePct}%</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          `
+        }
+      </div>
+
+      <div class="card report-section">
+        <h3>Achievements and Badges</h3>
+
+        ${badges.length === 0
+          ? '<p>No badges earned yet. Continue learning to unlock achievements!</p>'
+          : badges.map(badge => `
+              <p>
+                ${escapeHtml(badge.icon || '🏅')}
+                <strong>${escapeHtml(badge.name || '')}</strong>
+                — ${escapeHtml(badge.description || '')}
+              </p>
+            `).join('')
+        }
+      </div>
+
+      <div class="report-section" style="text-align:center;">
+        <p class="muted">
+          Keep learning and developing your digital skills with Brain Byte!
+        </p>
+      </div>
+    `;
+
+  } catch (error) {
+    container.innerHTML = `
+      <div class="card">
+        <h3>Unable to generate report</h3>
+        <p>${escapeHtml(error.message)}</p>
+        <a href="dashboard.html" class="btn">Return to Dashboard</a>
+      </div>
+    `;
+  }
+}
+</script>
+
+</body>
+</html>

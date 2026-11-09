@@ -25,10 +25,13 @@
       </div>
       <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Log in</button>
     </form>
-    <p style="margin-top:18px; font-size:14px; text-align:center;">
+      </div>
+    <p style="margin-top:12px; font-size:14px; text-align:center;">
+      <a href="forgot-password.html">Forgot your password?</a>
+    </p>
+    <p style="margin-top:10px; font-size:14px; text-align:center;">
       New to Brain Byte? <a href="register.html">Create an account</a>
     </p>
-  </div>
 </div>
 
 <script src="js/api.js"></script>
@@ -53,9 +56,9 @@
           email: document.getElementById('email').value,
           password: document.getElementById('password').value,
         },
-      });
-      Auth.setSession(data.token, data.user);
-      window.location.href = 'dashboard.html';
+      });      
+       Auth.setSession(data.token, data.user);
+      window.location.href = data.user.email_verified === 0 ? 'verify.html' : 'dashboard.html';
     } catch (err) {
       errorBox.textContent = err.message;
       errorBox.style.display = 'block';
